@@ -1,0 +1,12 @@
+# IntelliJ stuff
+/.idea/
+Psifidoto.iml
+
+# Output stuff
+/target/
+
+# Experimental scripts
+/src/main/java/hu/aestallon/psifidoto/scripts/
+
+# Initial testing resources
+/src/main/resources/testimages/
