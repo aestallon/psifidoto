@@ -13,7 +13,7 @@ public class Mosaic {
     private final Set<Tile> tiles;
 
     private final Grid<Color> colourGrid;
-    private final Grid<BufferedImage> imageGrid;
+    private final Grid<Tile> tileGrid;
 
     private final int tileHeight;
     private final int tileWidth;
@@ -24,7 +24,7 @@ public class Mosaic {
         this.image = image;
         this.tiles = tiles;
 
-        int[] rowsAndCols = calculateRowsAndCols(Mosaic.this.tiles.size()/*3_000*/);
+        int[] rowsAndCols = calculateRowsAndCols(/*Mosaic.this.tiles.size()*/3_000);
         this.rowCount = rowsAndCols[0];
         this.columnCount = rowsAndCols[1];
 
@@ -34,9 +34,9 @@ public class Mosaic {
         this.colourGrid = new Grid<>(columnCount, rowCount);
         fillColourGrid();
 
-        this.imageGrid = new Grid<>(columnCount, rowCount);
-        fillImageGridSimple();
-//        fillImageGridCenterBiased();
+        this.tileGrid = new Grid<>(columnCount, rowCount);
+        //fillImageGridSimple();
+        fillImageGridCenterBiased(5);
     }
 
     private int[] calculateRowsAndCols(int tileCount) {
@@ -73,13 +73,13 @@ public class Mosaic {
                 if (bestMatching3Tiles.get(bestMatching3Tiles.size() - 1).colourDistance(targetColour) <= 50) {
                     Collections.shuffle(bestMatching3Tiles);
                 }
-                imageGrid.add(j, i, bestMatching3Tiles.get(0).getImage());
+                tileGrid.add(j, i, bestMatching3Tiles.get(0));
                 availableTiles.remove(bestMatching3Tiles.get(0));
             }
         }
     }
 
-    private void fillImageGridCenterBiased() {
+    private void fillImageGridCenterBiased(int minimumRepetitionDistance) {
         Set<Tile> availableTiles = new HashSet<>(tiles);
         final int centreX = columnCount / 2;
         final int centreY = rowCount / 2;
@@ -94,12 +94,23 @@ public class Mosaic {
         while (!queue.isEmpty()) {
             Grid.Coordinate<Color> colourCoord = queue.poll();
             Color targetColour = colourCoord.unwrap();
-            Tile bestMatchingTile = availableTiles.stream()
-                    .min(Comparator.comparingInt(tile -> tile.colourDistance(targetColour)))
-                    .orElseThrow(InsufficientTileException::new);
 
-            imageGrid.add(colourCoord.x(), colourCoord.y(), bestMatchingTile.getImage());
-            availableTiles.remove(bestMatchingTile);
+            Tile bestMatchingTile;
+            if (minimumRepetitionDistance == 0) {
+                bestMatchingTile = availableTiles.stream()
+                        .min(Comparator.comparingInt(tile -> tile.colourDistance(targetColour)))
+                        .orElseThrow(InsufficientTileException::new);
+            } else {
+                Stack<Tile> tileStack = availableTiles.stream()
+                        .sorted(Comparator.comparingInt((Tile tile) -> tile.colourDistance(targetColour)).reversed())
+                        .collect(Collectors.toCollection(Stack::new));
+                do {
+                    bestMatchingTile = tileStack.pop();
+                } while (!tileStack.empty() && distanceToSameImageOnGrid(bestMatchingTile, colourCoord.x(), colourCoord.y()) < minimumRepetitionDistance);
+            }
+
+            tileGrid.add(colourCoord.x(), colourCoord.y(), bestMatchingTile);
+//            availableTiles.remove(bestMatchingTile);
             for (Grid.Coordinate<Color> neighbour : colourGrid.neighboursOf(colourCoord)) {
                 if (!visited.contains(neighbour)) {
                     visited.add(neighbour);
@@ -107,6 +118,31 @@ public class Mosaic {
                 }
             }
         }
+    }
+
+    private int distanceToSameImageOnGrid(Tile tile, int placementX, int placementY) {
+        Set<Grid.Coordinate<Tile>> visited = new TreeSet<>();
+        Queue<Grid.Coordinate<Tile>> queue = new ArrayDeque<>();
+
+        SortedSet<Grid.Coordinate<Tile>> neighbours = tileGrid.neighboursOf(placementX, placementY);
+        visited.addAll(neighbours);
+        queue.addAll(neighbours);
+
+        while (!queue.isEmpty()) {
+            Grid.Coordinate<Tile> c = queue.poll();
+            if (c.unwrap().equals(tile)) {
+                int dX = placementX - c.x();
+                int dY = placementY - c.y();
+                return (int) Math.round(Math.sqrt(dX*dX + dY*dY));
+            }
+            for (var neighbour : tileGrid.neighboursOf(c)) {
+                if (!visited.contains(neighbour)) {
+                    visited.add(neighbour);
+                    queue.add(neighbour);
+                }
+            }
+        }
+        return Integer.MAX_VALUE;
     }
 
     // naive implementation
@@ -120,7 +156,7 @@ public class Mosaic {
         for (int i = 0; i < rowCount; i++) {
             for (int j = 0; j < columnCount; j++) {
                 System.out.println("Treating image: " + (i * columnCount + j + 1) + " started...");
-                BufferedImage tileImage = imageGrid.get(j, i).unwrap();
+                BufferedImage tileImage = tileGrid.get(j, i).unwrap().getImage();
                 BufferedImage resizedTileImage = new BufferedImage(tileWidth, tileHeight, tileImage.getType());
                 SwingUtilities.invokeAndWait(() -> {
                     Graphics2D tileG = resizedTileImage.createGraphics();
