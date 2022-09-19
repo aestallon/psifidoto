@@ -23,14 +23,15 @@ public class Mosaic {
         this.imageGrid = new ImageGrid();
 
         fillImageGridSimple();
+//        fillImageGridCenterBiased();
     }
 
     // naive implementation
     private void fillImageGridSimple() {
         Set<Tile> availableTiles = new HashSet<>(tiles);
-        for (int i = 0; i < colourGrid.grid.length; i++) {
-            for (int j = 0; j < colourGrid.grid[0].length; j++) {
-                final Color targetColour = colourGrid.grid[i][j];
+        for (int i = 0; i < colourGrid.rowCount; i++) {
+            for (int j = 0; j < colourGrid.columnCount; j++) {
+                final Color targetColour = colourGrid.getColourAt(j, i);
                 /*Tile bestMatchingTile = availableTiles.stream()
                         .min(Comparator.comparingInt(tile -> tile.colourDistance(targetColour)))
                         .orElseThrow(InsufficientTileException::new);
@@ -39,26 +40,44 @@ public class Mosaic {
                         .sorted(Comparator.comparingInt(tile -> tile.colourDistance(targetColour)))
                         .limit(3)
                         .collect(Collectors.toList());
-                if (bestMatching3Tiles.get(2).colourDistance(targetColour) <= 50) {
+                if (bestMatching3Tiles.get(bestMatching3Tiles.size() - 1).colourDistance(targetColour) <= 50) {
                     Collections.shuffle(bestMatching3Tiles);
                 }
-                imageGrid.grid[i][j] = bestMatching3Tiles.get(0).getImage();
-                //availableTiles.remove(bestMatchingTile);
+                imageGrid.grid.add(new Coordinate<>(j, i, bestMatching3Tiles.get(0).getImage()));
+                availableTiles.remove(bestMatching3Tiles.get(0));
             }
         }
     }
 
     private void fillImageGridCenterBiased() {
         Set<Tile> availableTiles = new HashSet<>(tiles);
-        final int centreX = colourGrid.grid.length / 2;
-        final int centreY = colourGrid.grid[0].length / 2;
+        final int centreX = colourGrid.columnCount / 2;
+        final int centreY = colourGrid.rowCount / 2;
 
-        Set<Color> visited = new HashSet<>();
-        Queue<Color> queue = new ArrayDeque<>();
+        Set<Coordinate<Color>> visited = new TreeSet<>();
+        Queue<Coordinate<Color>> queue = new ArrayDeque<>();
 
-        queue.add(colourGrid.grid[centreX][centreY]);
+        Coordinate<Color> root = colourGrid.get(centreX, centreY);
+        visited.add(root);
+        queue.add(root);
+
         while (!queue.isEmpty()) {
-            // TODO: incomplete.
+            Coordinate<Color> colourCoord = queue.poll();
+            Color targetColour = colourCoord.t;
+            Tile bestMatchingTile = availableTiles.stream()
+                    .min(Comparator.comparingInt(tile -> tile.colourDistance(targetColour)))
+                    .orElseThrow(InsufficientTileException::new);
+
+            imageGrid.grid.add(new Coordinate<>(
+                    colourCoord.x, colourCoord.y, bestMatchingTile.getImage()
+            ));
+            availableTiles.remove(bestMatchingTile);
+            for (Coordinate<Color> neighbour : colourGrid.neighboursOf(colourCoord)) {
+                if (!visited.contains(neighbour)) {
+                    visited.add(neighbour);
+                    queue.add(neighbour);
+                }
+            }
         }
     }
 
@@ -70,10 +89,10 @@ public class Mosaic {
         g.fillRect(0, 0, image.getWidth(), image.getHeight());
         g.dispose();
         System.out.println("Result image supposedly prepared");
-        for (int i = 0; i < imageGrid.grid.length; i++) {
-            for (int j = 0; j < imageGrid.grid[0].length; j++) {
-                System.out.println("Treating image: " + (i * imageGrid.grid[0].length + j + 1) + " started...");
-                BufferedImage tileImage = imageGrid.grid[i][j];
+        for (int i = 0; i < colourGrid.rowCount; i++) {
+            for (int j = 0; j < colourGrid.columnCount; j++) {
+                System.out.println("Treating image: " + (i * colourGrid.columnCount + j + 1) + " started...");
+                BufferedImage tileImage = imageGrid.getImageAt(j, i);
                 BufferedImage resizedTileImage = new BufferedImage(colourGrid.tileWidth, colourGrid.tileHeight, tileImage.getType());
                 SwingUtilities.invokeAndWait(() -> {
                     Graphics2D tileG = resizedTileImage.createGraphics();
@@ -81,7 +100,6 @@ public class Mosaic {
                     tileG.drawImage(tileImage, 0, 0, colourGrid.tileWidth, colourGrid.tileHeight, 0, 0, tileImage.getWidth(), tileImage.getHeight(), null);
                     tileG.dispose();
                 });
-//                Thread.sleep(2_000L);
                 int finalJ = j;
                 int finalI = i;
                 SwingUtilities.invokeAndWait(() -> {
@@ -89,8 +107,7 @@ public class Mosaic {
                     resultGraphics.drawImage(resizedTileImage, null, finalJ * colourGrid.tileWidth, finalI * colourGrid.tileHeight);
 //                    resultGraphics.dispose();
                 });
-//                Thread.sleep(2_000L);
-                System.out.println("Treating image: " + (i * imageGrid.grid[0].length + j + 1) + " completed.");
+                System.out.println("Treating image: " + (i * colourGrid.columnCount + j + 1) + " completed.");
             }
         }
         return result;
@@ -99,24 +116,30 @@ public class Mosaic {
     private class ColourGrid {
         private final int tileHeight;
         private final int tileWidth;
-        private final Color[][] grid;
+        private final int rowCount;
+        private final int columnCount;
+
+        private final SortedSet<Coordinate<Color>> grid;
 
         public ColourGrid() {
-            int[] rowsAndCols = calculateRowsAndCols(/*Mosaic.this.tiles.size()*/2_000);
-            int rows = rowsAndCols[0];
-            int cols = rowsAndCols[1];
-            this.grid = new Color[rows][cols];
+            int[] rowsAndCols = calculateRowsAndCols(Mosaic.this.tiles.size()/*3_000*/);
+            this.rowCount = rowsAndCols[0];
+            this.columnCount = rowsAndCols[1];
+            this.grid = new TreeSet<>();
 
-            this.tileHeight = image.getHeight() / rows;
-            this.tileWidth = image.getWidth() / cols;
-            for (int i = 0; i < rows; i++) {
-                for (int j = 0; j < cols; j++) {
+            this.tileHeight = image.getHeight() / rowCount;
+            this.tileWidth = image.getWidth() / columnCount;
+            for (int i = 0; i < rowCount; i++) {
+                for (int j = 0; j < columnCount; j++) {
                     // Boundaries
                     int x0 = j * tileWidth;
                     int x1 = x0 + tileWidth;
                     int y0 = i * tileHeight;
                     int y1 = y0 + tileHeight;
-                    grid[i][j] = ImageUtils.calculateAverageColourOfRegion(image, x0, x1, y0, y1);
+                    Coordinate<Color> colourCoordinate = new Coordinate<>(
+                            j, i, ImageUtils.calculateAverageColourOfRegion(image, x0, x1, y0, y1)
+                    );
+                    grid.add(colourCoordinate);
                 }
             }
         }
@@ -124,20 +147,75 @@ public class Mosaic {
         private int[] calculateRowsAndCols(int tileCount) {
             int factor = (int) Math.sqrt(tileCount);
             while (tileCount % factor != 0) factor--;
-            //return new int[]{factor, tileCount / factor};
-            return new int[]{tileCount / factor, factor};
+            return new int[]{factor, tileCount / factor};
+//            return new int[]{tileCount / factor, factor};
         }
+
+        private Coordinate<Color> get(int x, int y) {
+            return grid.stream().filter(coord -> coord.x == x && coord.y == y)
+                    .findFirst()
+                    .orElseThrow(IllegalArgumentException::new);
+        }
+
+        private Color getColourAt(int x, int y) {
+            return grid.stream().filter(coord -> coord.x == x && coord.y == y)
+                    .findFirst()
+                    .orElseThrow(IllegalArgumentException::new)
+                    .t;
+        }
+
+        private SortedSet<Coordinate<Color>> neighboursOf(Coordinate<Color> colorCoordinate) {
+            return grid.stream()
+                    .filter(
+                            c -> c.x - colorCoordinate.x <= 1 && c.x - colorCoordinate.x >= -1 &&
+                                 c.y - colorCoordinate.y <= 1 && c.y - colorCoordinate.y >= -1 &&
+                                 !c.equals(colorCoordinate)
+                    )
+                    .collect(Collectors.toCollection(TreeSet::new));
+        }
+
     }
 
-    private class ImageGrid {
-        private final BufferedImage[][] grid;
+    private static class ImageGrid {
+        private final SortedSet<Coordinate<BufferedImage>> grid;
 
         private ImageGrid() {
-            this.grid = new BufferedImage[colourGrid.grid.length][colourGrid.grid[0].length];
+            this.grid = new TreeSet<>();
+        }
+
+        private boolean add(Coordinate<BufferedImage> imageCoordinate) {
+            return grid.add(imageCoordinate);
+        }
+
+        private boolean contains(Coordinate<BufferedImage> imageCoordinate) {
+            return grid.contains(imageCoordinate);
+        }
+
+        private SortedSet<Coordinate<BufferedImage>> neighboursOf(Coordinate<BufferedImage> imageCoordinate) {
+            return grid.stream()
+                    .filter(
+                            c -> c.x - imageCoordinate.x <= 1 && c.x - imageCoordinate.x >= -1 &&
+                                 c.y - imageCoordinate.y <= 1 && c.y - imageCoordinate.y >= -1 &&
+                                 !c.equals(imageCoordinate)
+                    )
+                    .collect(Collectors.toCollection(TreeSet::new));
+        }
+
+        private Coordinate<BufferedImage> get(int x, int y) {
+            return grid.stream().filter(coord -> coord.x == x && coord.y == y)
+                    .findFirst()
+                    .orElseThrow(IllegalArgumentException::new);
+        }
+
+        private BufferedImage getImageAt(int x, int y) {
+            return grid.stream().filter(coord -> coord.x == x && coord.y == y)
+                    .findFirst()
+                    .orElseThrow(IllegalArgumentException::new)
+                    .t;
         }
     }
 
-    private static class Coordinate<T> {
+    private static class Coordinate<T> implements Comparable<Coordinate<T>> {
         private final int x;
         private final int y;
         private final T t;
@@ -146,6 +224,27 @@ public class Mosaic {
             this.x = x;
             this.y = y;
             this.t = t;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (!(o instanceof Coordinate<?> another)) return false;
+            return this.x == another.x &&
+                   this.y == another.y;
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(x, y);
+        }
+
+        @Override
+        public int compareTo(Coordinate<T> another) {
+            int dX = this.x - another.x;
+            return (dX == 0)
+                    ? this.y - another.y
+                    : dX;
         }
     }
 
