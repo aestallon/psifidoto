@@ -3,6 +3,7 @@ package hu.aestallon.psifidoto.mosaic;
 import java.util.Objects;
 import java.util.SortedSet;
 import java.util.TreeSet;
+import java.util.stream.Collectors;
 
 public final class Grid<E> {
     private final int width;
@@ -23,10 +24,38 @@ public final class Grid<E> {
         return height;
     }
 
+    public boolean add(int x, int y, E e) {
+        if (x < 0 || x >= width || y < 0 || y >= height) {
+            throw new IllegalArgumentException("Illegal coordinates!");
+        }
+        if (e == null) throw new NullPointerException("Cannot add null element to grid!");
+        return coordinates.add(new Coordinate<>(x, y, e));
+    }
+
     public Coordinate<E> get(int x, int y) {
         return coordinates.stream().filter(c -> c.x == x && c.y == y)
                 .findFirst()
                 .orElseThrow(IllegalArgumentException::new);
+    }
+
+    public SortedSet<Coordinate<E>> neighboursOf(Coordinate<E> coord) {
+        return coordinates.stream()
+                .filter(
+                        c -> c.x - coord.x <= 1 && c.x - coord.x >= -1 &&
+                             c.y - coord.y <= 1 && c.y - coord.y >= -1 &&
+                             !c.equals(coord)
+                )
+                .collect(Collectors.toCollection(TreeSet::new));
+    }
+
+    public SortedSet<Coordinate<E>> neighboursOf(int x, int y) {
+        return coordinates.stream()
+                .filter(
+                        c -> c.x - x <= 1 && c.x - x >= -1 &&
+                             c.y - y <= 1 && c.y - y >= -1 &&
+                             !(c.x == x && c.y == y)
+                )
+                .collect(Collectors.toCollection(TreeSet::new));
     }
 
     static class Coordinate<E> implements Comparable<Coordinate<E>> {

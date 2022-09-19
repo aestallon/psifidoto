@@ -12,36 +12,29 @@ import java.nio.file.Path;
 import java.time.LocalTime;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 public class Application {
 
     public static void main(String[] args) throws IOException, InterruptedException, InvocationTargetException {
-            System.out.println(LocalTime.now() + " Application started.");
+        System.out.println(LocalTime.now() + " Application started.");
         Set<Tile> tileSet = Files.list(Path.of("src", "main", "resources", "testimages", "tiles", "downsized"))
                 .map(Path::toString)
                 .filter(s -> s.endsWith(".jpg"))
-//                .limit(10L)
                 .map(Application::openInputStream)
                 .map(Application::readImage)
-//                .map(bi -> {
-//                    BufferedImage resized = new BufferedImage(700, 394, bi.getType());
-//                    Graphics2D g = resized.createGraphics();
-//                    g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
-//                    g.drawImage(bi, 0, 0, 700, 394, 0, 0, bi.getWidth(), bi.getHeight(), null);
-//                    g.dispose();
-//                    return resized;
-//                })
                 .map(Tile::new)
+                .flatMap(tile -> Stream.of(tile, new Tile(tile.getImage()), new Tile(tile.getImage())))
                 .collect(Collectors.toSet());
-            System.out.println(LocalTime.now() + " Tile images loaded...");
-        BufferedImage targetImage = ImageIO.read(openInputStream("src/main/resources/testimages/dream/9VSUuP47Hfw.jpg"));
-            System.out.println(LocalTime.now() + " Target image loading completed...");
+        System.out.println(LocalTime.now() + " Tile images loaded...");
+        BufferedImage targetImage = ImageIO.read(openInputStream("src/main/resources/testimages/dream/tomato.jpg"));
+        System.out.println(LocalTime.now() + " Target image loading completed...");
         Mosaic m = new Mosaic(targetImage, tileSet);
-            System.out.println(LocalTime.now() + " Mosaic assessed...");
+        System.out.println(LocalTime.now() + " Mosaic assessed...");
         BufferedImage result = m.export();
-            System.out.println(LocalTime.now() + " Result export returned...");
-        writeImage(result, "src/main/resources/testimages/dream/9VSUuP47Hfw_MOSAIC_unbound.jpg");
-            System.out.println(LocalTime.now() + " Write complete!");
+        System.out.println(LocalTime.now() + " Result export returned...");
+        writeImage(result, "src/main/resources/testimages/dream/tomato_MOSAIC_topDownBias_triplePic_refactor.jpg");
+        System.out.println(LocalTime.now() + " Write complete!");
     }
 
     private static InputStream openInputStream(String path) {
