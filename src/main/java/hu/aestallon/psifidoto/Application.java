@@ -24,7 +24,7 @@ public class Application {
                 .map(Application::openInputStream)
                 .map(Application::readImage)
                 .map(Tile::new)
-                .flatMap(tile -> Stream.of(tile, new Tile(tile.getImage()), new Tile(tile.getImage())))
+//                .flatMap(tile -> Stream.of(tile, tile.copy(), tile.copy()))
                 .collect(Collectors.toSet());
         System.out.println(LocalTime.now() + " Tile images loaded...");
         BufferedImage targetImage = ImageIO.read(openInputStream("src/main/resources/testimages/dream/tomato.jpg"));
@@ -33,7 +33,7 @@ public class Application {
         System.out.println(LocalTime.now() + " Mosaic assessed...");
         BufferedImage result = m.export();
         System.out.println(LocalTime.now() + " Result export returned...");
-        writeImage(result, "src/main/resources/testimages/dream/tomato_MOSAIC_topDownBias_triplePic_refactor.jpg");
+        writeImage(result, "src/main/resources/testimages/dream/tomato_MOSAIC_centerBias_5distance_NOTFUCKED.jpg");
         System.out.println(LocalTime.now() + " Write complete!");
     }
 
