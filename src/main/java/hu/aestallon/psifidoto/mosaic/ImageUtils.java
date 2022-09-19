@@ -17,7 +17,7 @@ public class ImageUtils {
                 b += pixel & 0xFF;
             }
         }
-        r = r / pixelCount; g = g / pixelCount; b = b / pixelCount;
+        r = Math.round((double) r / pixelCount); g = Math.round((double) g / pixelCount); b = Math.round((double) b / pixelCount);
         return new Color((int) r, (int) g, (int) b);
     }
 
@@ -43,7 +43,7 @@ public class ImageUtils {
             }
         }
         r = r / pixelCount; g = g / pixelCount; b = b / pixelCount;
-        r = (long) Math.sqrt(r); g = (long) Math.sqrt(g); b = (long) Math.sqrt(b);
+        r = Math.round(Math.sqrt(r)); g = Math.round(Math.sqrt(g)); b = Math.round(Math.sqrt(b));
         return new Color((int) r, (int) g, (int) b);
     }
 }
