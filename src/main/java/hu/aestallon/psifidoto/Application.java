@@ -10,30 +10,30 @@ import java.lang.reflect.InvocationTargetException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalTime;
-import java.util.Set;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public class Application {
+    public static final String           TARGET_IMAGE            = "fosh";
+    public static final String           RESULT_QUALIFIER        = "_5d_16to9_4000";
+    public static final int              MIN_REPETITION_DISTANCE = 5;
+    public static final Tile.AspectRatio ASPECT_RATIO            = Tile.AspectRatio.FULL_LANDSCAPE;
+    public static final int              TILE_COUNT              = 4000;
 
     public static void main(String[] args) throws IOException, InterruptedException, InvocationTargetException {
         System.out.println(LocalTime.now() + " Application started.");
-        Set<Tile> tileSet = Files.list(Path.of("src", "main", "resources", "testimages", "tiles", "downsized"))
+        Stream<BufferedImage> tileSet = Files.list(Path.of("src", "main", "resources", "testimages", "tiles", "downsized"))
                 .map(Path::toString)
                 .filter(s -> s.endsWith(".jpg"))
                 .map(Application::openInputStream)
-                .map(Application::readImage)
-                .map(Tile::new)
-//                .flatMap(tile -> Stream.of(tile, tile.copy(), tile.copy()))
-                .collect(Collectors.toSet());
+                .map(Application::readImage);
         System.out.println(LocalTime.now() + " Tile images loaded...");
-        BufferedImage targetImage = ImageIO.read(openInputStream("src/main/resources/testimages/dream/tomato.jpg"));
+        BufferedImage targetImage = ImageIO.read(openInputStream("src/main/resources/testimages/dream/fabric/" + TARGET_IMAGE + ".jpg"));
         System.out.println(LocalTime.now() + " Target image loading completed...");
-        Mosaic m = new Mosaic(targetImage, tileSet);
+        Mosaic m = new Mosaic(targetImage, tileSet, TILE_COUNT, MIN_REPETITION_DISTANCE, ASPECT_RATIO);
         System.out.println(LocalTime.now() + " Mosaic assessed...");
         BufferedImage result = m.export();
         System.out.println(LocalTime.now() + " Result export returned...");
-        writeImage(result, "src/main/resources/testimages/dream/tomato_MOSAIC_centerBias_5distance_NOTFUCKED.jpg");
+        writeImage(result, "src/main/resources/testimages/dream/fabric/" + TARGET_IMAGE + RESULT_QUALIFIER + ".jpg");
         System.out.println(LocalTime.now() + " Write complete!");
     }
 

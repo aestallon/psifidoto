@@ -7,6 +7,7 @@ import java.lang.reflect.InvocationTargetException;
 import java.util.*;
 import java.util.List;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 public class Mosaic {
     private final BufferedImage image;
@@ -20,11 +21,11 @@ public class Mosaic {
     private final int rowCount;
     private final int columnCount;
 
-    public Mosaic(BufferedImage image, Set<Tile> tiles) {
+    public Mosaic(BufferedImage image, Set<Tile> tiles, int minimumRepetitionDistance, int tileCount) {
         this.image = image;
         this.tiles = tiles;
 
-        int[] rowsAndCols = calculateRowsAndCols(/*Mosaic.this.tiles.size()*/3_000);
+        int[] rowsAndCols = calculateRowsAndCols(tileCount);
         this.rowCount = rowsAndCols[0];
         this.columnCount = rowsAndCols[1];
 
@@ -35,8 +36,28 @@ public class Mosaic {
         fillColourGrid();
 
         this.tileGrid = new Grid<>(columnCount, rowCount);
-        //fillImageGridSimple();
-        fillImageGridCenterBiased(5);
+        fillImageGridCenterBiased(minimumRepetitionDistance);
+    }
+
+    public Mosaic(BufferedImage targetImage, Stream<BufferedImage> tileImages, int tileCount, int minimumRepetitionDistance, Tile.AspectRatio tileAspectRatio) {
+        this.image = targetImage;
+
+        int[] rowsAndCols = calculateRowsAndCols(tileCount, tileAspectRatio);
+        this.columnCount = rowsAndCols[0];
+        this.rowCount = rowsAndCols[1];
+
+        this.tileHeight = image.getHeight() / rowCount;
+        this.tileWidth = image.getWidth() / columnCount;
+
+        this.tiles = tileImages
+                .map(bi -> new Tile(bi, tileAspectRatio))
+                .collect(Collectors.toSet());
+
+        this.colourGrid = new Grid<>(columnCount, rowCount);
+        fillColourGrid();
+
+        this.tileGrid = new Grid<>(columnCount, rowCount);
+        fillImageGridCenterBiased(minimumRepetitionDistance);
     }
 
     private int[] calculateRowsAndCols(int tileCount) {
@@ -44,6 +65,44 @@ public class Mosaic {
         while (tileCount % factor != 0) factor--;
         return new int[]{factor, tileCount / factor};
 //            return new int[]{tileCount / factor, factor};
+    }
+
+    // TODO: THIS METHOD FAILS REGULARLY ON PORTRAIT ORIENTED TARGET IMAGES
+    private int[] calculateRowsAndCols(int tileCount, Tile.AspectRatio aspectRatio) {
+        double imageRatio = (double) image.getWidth() / image.getHeight();
+        /*
+         * expectation:
+         * x * y = tileCount,
+         * x * aspectRatio / y = imageRatio ----- within allowed Diff
+         */
+
+        int cols;
+        int rows;
+        double ratioDiff = 0d;
+        if (Double.compare(imageRatio, 1d) >= 0) {
+            cols = tileCount;
+            rows = 1;
+            while ((rows * cols != tileCount) || ratioDiff < 0.8d || ratioDiff > 1.2d) {
+                cols--;
+                if (cols == 0) {
+                    throw new ArithmeticException("Rows&Cols calculation failed!");
+                }
+                rows = (int) Math.round((double) tileCount / cols);
+                ratioDiff = (imageRatio / aspectRatio.ratio()) / ((double) cols / rows);
+            }
+        } else {  // PROBABLY SUPERFLUOUS
+            cols = 1;
+            rows = tileCount;
+            while ((rows * cols != tileCount) || ratioDiff < 0.8d || ratioDiff > 1.2d) {
+                cols++;
+                if (cols == tileCount) {
+                    throw new ArithmeticException("Rows&Cols calculation failed!");
+                }
+                rows = (int) Math.round((double) tileCount / cols);
+                ratioDiff = (imageRatio / aspectRatio.ratio()) / ((double) cols / rows);
+            }
+        }
+        return new int[]{cols, rows};
     }
 
     private void fillColourGrid() {
@@ -147,10 +206,12 @@ public class Mosaic {
 
     // naive implementation
     public BufferedImage export() throws InterruptedException, InvocationTargetException {
-        BufferedImage result = new BufferedImage(image.getWidth(), image.getHeight(), BufferedImage.TYPE_INT_RGB);
+        final int resultWidth = tileWidth * columnCount;
+        final int resultHeight = tileHeight * rowCount;
+        BufferedImage result = new BufferedImage(resultWidth, resultHeight, BufferedImage.TYPE_INT_RGB);
         Graphics2D g = result.createGraphics();
         g.setPaint(Color.WHITE);
-        g.fillRect(0, 0, image.getWidth(), image.getHeight());
+        g.fillRect(0, 0, resultWidth, resultHeight);
         g.dispose();
         System.out.println("Result image supposedly prepared");
         for (int i = 0; i < rowCount; i++) {
