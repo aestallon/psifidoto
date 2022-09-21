@@ -6,37 +6,75 @@ import hu.aestallon.psifidoto.mosaic.Tile;
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.*;
-import java.lang.reflect.InvocationTargetException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.LocalTime;
 import java.util.stream.Stream;
 
 public class Application {
-    public static final String           TARGET_IMAGE            = "parrot";
-    public static final int              MIN_REPETITION_DISTANCE = 5;
-    public static final Tile.AspectRatio ASPECT_RATIO            = Tile.AspectRatio.WIDE_LANDSCAPE;
-    public static final int              TILE_COUNT              = 4000;
-    public static final String           RESULT_QUALIFIER        = "_" + MIN_REPETITION_DISTANCE +
-                                                                   "d_" + ASPECT_RATIO + "_" +
-                                                                   TILE_COUNT;
+    public static final Path TILE_DIR = Path.of(
+            "src",
+            "main",
+            "resources",
+            "testimages",
+            "tiles",
+            "downsized"
+    );
 
-    public static void main(String[] args) throws IOException, InterruptedException, InvocationTargetException {
-        System.out.println(LocalTime.now() + " Application started.");
-        Stream<BufferedImage> tileSet = Files.list(Path.of("src", "main", "resources", "testimages", "tiles", "downsized"))
-                .map(Path::toString)
-                .filter(s -> s.endsWith(".jpg"))
-                .map(Application::openInputStream)
-                .map(Application::readImage);
-        System.out.println(LocalTime.now() + " Tile images loaded...");
-        BufferedImage targetImage = ImageIO.read(openInputStream("src/main/resources/testimages/dream/fabric/" + TARGET_IMAGE + ".jpg"));
-        System.out.println(LocalTime.now() + " Target image loading completed...");
-        Mosaic m = new Mosaic(targetImage, tileSet, TILE_COUNT, MIN_REPETITION_DISTANCE, ASPECT_RATIO);
-        System.out.println(LocalTime.now() + " Mosaic assessed...");
-        BufferedImage result = m.export();
-        System.out.println(LocalTime.now() + " Result export returned...");
-        writeImage(result, "src/main/resources/testimages/dream/fabric/" + TARGET_IMAGE + RESULT_QUALIFIER + ".jpg");
-        System.out.println(LocalTime.now() + " Write complete!");
+    public static final int MIN_REPETITION_DISTANCE =     5;
+    public static final int TILE_COUNT              = 4_000;
+
+    public static void main(String[] args) {
+        final String[] sourceImages = {"BGEDIT-4", "parrot", "branch"};
+
+        for (String source : sourceImages) {
+            for (var aspectRatio : Tile.AspectRatio.values()) {
+
+                try {
+                    run(source, MIN_REPETITION_DISTANCE, aspectRatio, TILE_COUNT);
+                } catch (Exception anyException) {
+                    System.err.println(
+                            "Run: [[[" + source + " " + aspectRatio +
+                            " min-rep: " + MIN_REPETITION_DISTANCE +
+                            " tiles: " + TILE_COUNT + "]]] FAILED!"
+                    );
+                    anyException.printStackTrace();
+                }
+            }
+        }
+
+    }
+
+    public static void run(String source,
+                           int minRepetitionDistance,
+                           Tile.AspectRatio tileAspectRatio,
+                           int tileCount) throws Exception {
+        final String srcPath         = "src/main/resources/testimages/dream/fabric/" +
+                                       source + ".jpg";
+        final String resultQualifier = "_" + minRepetitionDistance +
+                                       "d_" + tileAspectRatio +
+                                       "_" + tileCount;
+        final String destPath        = "src/main/resources/testimages/dream/fabric/" +
+                                       source + resultQualifier + ".jpg";
+
+        System.out.println("Run: [[[" + source+resultQualifier + "]]] started!");
+        try (Stream<Path> paths = Files.list(TILE_DIR)) {
+            Stream<BufferedImage> tileSet = paths
+                    .map(Path::toString)
+                    .filter(s -> s.endsWith(".jpg"))
+                    .map(Application::openInputStream)
+                    .map(Application::readImage);
+            BufferedImage targetImage = ImageIO.read(openInputStream(srcPath));
+            Mosaic m = new Mosaic(
+                    targetImage,
+                    tileSet,
+                    tileCount,
+                    minRepetitionDistance,
+                    tileAspectRatio
+            );
+            BufferedImage result = m.export();
+            writeImage(result, destPath);
+            System.out.println("Run: [[[" + source+resultQualifier + "]]] finished!");
+        }
     }
 
     private static InputStream openInputStream(String path) {
