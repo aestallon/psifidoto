@@ -58,7 +58,6 @@ public class Tile {
 
         if (aspectRatio == AspectRatio.SQUARE) {
             croppedWidth = croppedHeight = Math.min(originalWidth, originalHeight);
-//            croppedHeight = croppedWidth;
         } else {
             double desiredRatio = aspectRatio.ratio();
             double originalRatio = (double) originalWidth / originalHeight;
@@ -87,6 +86,7 @@ public class Tile {
         return croppedImage;
     }
 
+    @SuppressWarnings("unused")
     public Color getColour() {
         return colour;
     }
@@ -95,6 +95,7 @@ public class Tile {
         return image;
     }
 
+    @SuppressWarnings("unused")
     public Tile copy() {
         return new Tile(this.image, this.id, this.colour);
     }
