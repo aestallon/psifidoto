@@ -32,6 +32,7 @@ public class Tile {
     private final Color colour;
     private final BufferedImage image;
 
+    @Deprecated
     public Tile(BufferedImage image) {
         this.id = idCounter++;
         this.image = image;
@@ -56,8 +57,8 @@ public class Tile {
         int croppedWidth, croppedHeight;
 
         if (aspectRatio == AspectRatio.SQUARE) {
-            croppedWidth = Math.min(originalWidth, originalHeight);
-            croppedHeight = croppedWidth;
+            croppedWidth = croppedHeight = Math.min(originalWidth, originalHeight);
+//            croppedHeight = croppedWidth;
         } else {
             double desiredRatio = aspectRatio.ratio();
             double originalRatio = (double) originalWidth / originalHeight;

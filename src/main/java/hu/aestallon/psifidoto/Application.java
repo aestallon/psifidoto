@@ -13,11 +13,13 @@ import java.time.LocalTime;
 import java.util.stream.Stream;
 
 public class Application {
-    public static final String           TARGET_IMAGE            = "fosh";
-    public static final String           RESULT_QUALIFIER        = "_5d_16to9_4000";
+    public static final String           TARGET_IMAGE            = "parrot";
     public static final int              MIN_REPETITION_DISTANCE = 5;
-    public static final Tile.AspectRatio ASPECT_RATIO            = Tile.AspectRatio.FULL_LANDSCAPE;
+    public static final Tile.AspectRatio ASPECT_RATIO            = Tile.AspectRatio.WIDE_LANDSCAPE;
     public static final int              TILE_COUNT              = 4000;
+    public static final String           RESULT_QUALIFIER        = "_" + MIN_REPETITION_DISTANCE +
+                                                                   "d_" + ASPECT_RATIO + "_" +
+                                                                   TILE_COUNT;
 
     public static void main(String[] args) throws IOException, InterruptedException, InvocationTargetException {
         System.out.println(LocalTime.now() + " Application started.");

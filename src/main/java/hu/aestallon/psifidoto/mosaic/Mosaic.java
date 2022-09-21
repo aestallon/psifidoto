@@ -21,6 +21,7 @@ public class Mosaic {
     private final int rowCount;
     private final int columnCount;
 
+    @Deprecated
     public Mosaic(BufferedImage image, Set<Tile> tiles, int minimumRepetitionDistance, int tileCount) {
         this.image = image;
         this.tiles = tiles;
@@ -67,53 +68,40 @@ public class Mosaic {
 //            return new int[]{tileCount / factor, factor};
     }
 
-    // TODO: THIS METHOD FAILS REGULARLY ON PORTRAIT ORIENTED TARGET IMAGES
     private int[] calculateRowsAndCols(int tileCount, Tile.AspectRatio aspectRatio) {
-        double imageRatio = (double) image.getWidth() / image.getHeight();
-        /*
-         * expectation:
-         * x * y = tileCount,
-         * x * aspectRatio / y = imageRatio ----- within allowed Diff
-         */
+        assert image != null;
 
-        int cols;
-        int rows;
-        double ratioDiff = 0d;
-        if (Double.compare(imageRatio, 1d) >= 0) {
-            cols = tileCount;
-            rows = 1;
-            while ((rows * cols != tileCount) || ratioDiff < 0.8d || ratioDiff > 1.2d) {
-                cols--;
-                if (cols == 0) {
-                    throw new ArithmeticException("Rows&Cols calculation failed!");
-                }
-                rows = (int) Math.round((double) tileCount / cols);
-                ratioDiff = (imageRatio / aspectRatio.ratio()) / ((double) cols / rows);
-            }
-        } else {  // PROBABLY SUPERFLUOUS
-            cols = 1;
-            rows = tileCount;
-            while ((rows * cols != tileCount) || ratioDiff < 0.8d || ratioDiff > 1.2d) {
-                cols++;
-                if (cols == tileCount) {
-                    throw new ArithmeticException("Rows&Cols calculation failed!");
-                }
-                rows = (int) Math.round((double) tileCount / cols);
-                ratioDiff = (imageRatio / aspectRatio.ratio()) / ((double) cols / rows);
-            }
-        }
-        return new int[]{cols, rows};
+        double imageRatio = (double) image.getWidth() / image.getHeight();
+        double tileRatio = aspectRatio.ratio();
+//        int rows = (int) Math.round(Math.sqrt(tileRatio * tileCount / imageRatio));
+//        int cols = (int) Math.round((double) tileCount / rows);
+//        System.out.println("actual tile count = " + (rows * cols));
+//        return new int[]{rows, cols};
+        int side1 = (int) Math.round(Math.sqrt(tileRatio * tileCount / imageRatio));
+        int side2 = (int) Math.round(Math.sqrt(imageRatio * tileCount / tileRatio));
+        System.out.println("Actual tile count = " + (side1 * side2));
+        if (Double.compare(imageRatio / tileRatio, 1d) >= 0) {
+            return new int[]{side1, side2};
+        } else return new int[]{side2, side1};
     }
+
+    /*
+     * OLD CALCULATION:
+     * double imageRatio = (double) image.getWidth() / image.getHeight();
+     * double tileRatio = aspectRatio.ratio();
+     * int cols = (int) Math.round(Math.sqrt(tileCount * imageRatio / tileRatio));
+     * // some conditions require stepping upwards in the loop, but
+     * // I shall figure that one out later.
+     * while (tileCount % cols != 0) cols--;
+     * return new int[]{tileCount / cols, cols};
+     */
 
     private void fillColourGrid() {
         for (int i = 0; i < rowCount; i++) {
             for (int j = 0; j < columnCount; j++) {
-                // Boundaries of observed region:
-                int x0 = j * tileWidth;
-                int x1 = x0 + tileWidth;
-                int y0 = i * tileHeight;
-                int y1 = y0 + tileHeight;
-                colourGrid.add(j, i, ImageUtils.calculateAverageColourOfRegion(image, x0, x1, y0, y1));
+                colourGrid.add(j, i, ImageUtils.calculateAverageColourSquared(
+                        image.getSubimage(j * tileWidth, i * tileHeight, tileWidth, tileHeight)
+                ));
             }
         }
     }
