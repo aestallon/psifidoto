@@ -21,26 +21,11 @@ public class Mosaic {
     private final int rowCount;
     private final int columnCount;
 
-    @Deprecated
-    public Mosaic(BufferedImage image, Set<Tile> tiles, int minimumRepetitionDistance, int tileCount) {
-        this.image = image;
-        this.tiles = tiles;
-
-        int[] rowsAndCols = calculateRowsAndCols(tileCount);
-        this.rowCount = rowsAndCols[0];
-        this.columnCount = rowsAndCols[1];
-
-        this.tileHeight = image.getHeight() / rowCount;
-        this.tileWidth = image.getWidth() / columnCount;
-
-        this.colourGrid = new Grid<>(columnCount, rowCount);
-        fillColourGrid();
-
-        this.tileGrid = new Grid<>(columnCount, rowCount);
-        fillImageGridCenterBiased(minimumRepetitionDistance);
-    }
-
-    public Mosaic(BufferedImage targetImage, Stream<BufferedImage> tileImages, int tileCount, int minimumRepetitionDistance, Tile.AspectRatio tileAspectRatio) {
+    public Mosaic(BufferedImage targetImage,
+                  Stream<BufferedImage> tileImages,
+                  int tileCount,
+                  int minimumRepetitionDistance,
+                  Tile.AspectRatio tileAspectRatio) {
         this.image = targetImage;
 
         int[] rowsAndCols = calculateRowsAndCols(tileCount, tileAspectRatio);
@@ -48,7 +33,7 @@ public class Mosaic {
         this.rowCount = rowsAndCols[1];
 
         this.tileHeight = image.getHeight() / rowCount;
-        this.tileWidth = image.getWidth() / columnCount;
+        this.tileWidth = (int) Math.round(tileHeight * tileAspectRatio.ratio());
 
         this.tiles = tileImages
                 .map(bi -> new Tile(bi, tileAspectRatio))
@@ -61,53 +46,36 @@ public class Mosaic {
         fillImageGridCenterBiased(minimumRepetitionDistance);
     }
 
-    private int[] calculateRowsAndCols(int tileCount) {
-        int factor = (int) Math.sqrt(tileCount);
-        while (tileCount % factor != 0) factor--;
-        return new int[]{factor, tileCount / factor};
-//            return new int[]{tileCount / factor, factor};
-    }
-
     private int[] calculateRowsAndCols(int tileCount, Tile.AspectRatio aspectRatio) {
         assert image != null;
 
         double imageRatio = (double) image.getWidth() / image.getHeight();
         double tileRatio = aspectRatio.ratio();
-//        int rows = (int) Math.round(Math.sqrt(tileRatio * tileCount / imageRatio));
-//        int cols = (int) Math.round((double) tileCount / rows);
-//        System.out.println("actual tile count = " + (rows * cols));
-//        return new int[]{rows, cols};
         int side1 = (int) Math.round(Math.sqrt(tileRatio * tileCount / imageRatio));
         int side2 = (int) Math.round(Math.sqrt(imageRatio * tileCount / tileRatio));
         System.out.println("Actual tile count = " + (side1 * side2));
-        if (Double.compare(imageRatio / tileRatio, 1d) >= 0) {
+        // TODO: the algorithm works almost correctly with this line commented out.
+        //  An issue is with laying out portrait tiles: in this orientation the
+        //  tiles are always more elongated then they should be.
+        /*if (Double.compare(imageRatio / tileRatio, 1d) >= 0) {
             return new int[]{side1, side2};
-        } else return new int[]{side2, side1};
+        } else*/ return new int[]{side2, side1};
     }
 
-    /*
-     * OLD CALCULATION:
-     * double imageRatio = (double) image.getWidth() / image.getHeight();
-     * double tileRatio = aspectRatio.ratio();
-     * int cols = (int) Math.round(Math.sqrt(tileCount * imageRatio / tileRatio));
-     * // some conditions require stepping upwards in the loop, but
-     * // I shall figure that one out later.
-     * while (tileCount % cols != 0) cols--;
-     * return new int[]{tileCount / cols, cols};
-     */
-
     private void fillColourGrid() {
+        final int scanWidth  = image.getWidth() / columnCount;
+        final int scanHeight = image.getHeight() / rowCount;
         for (int i = 0; i < rowCount; i++) {
             for (int j = 0; j < columnCount; j++) {
                 colourGrid.add(j, i, ImageUtils.calculateAverageColourSquared(
-                        image.getSubimage(j * tileWidth, i * tileHeight, tileWidth, tileHeight)
+                        image.getSubimage(j * scanWidth, i * scanHeight, scanWidth, scanHeight)
                 ));
             }
         }
     }
 
-
-    // naive implementation
+    @Deprecated
+    @SuppressWarnings("unused")
     private void fillImageGridSimple() {
         Set<Tile> availableTiles = new HashSet<>(tiles);
         for (int i = 0; i < rowCount; i++) {
@@ -117,7 +85,9 @@ public class Mosaic {
                         .sorted(Comparator.comparingInt(tile -> tile.colourDistance(targetColour)))
                         .limit(3)
                         .collect(Collectors.toList());
-                if (bestMatching3Tiles.get(bestMatching3Tiles.size() - 1).colourDistance(targetColour) <= 50) {
+                if (bestMatching3Tiles
+                            .get(bestMatching3Tiles.size() - 1)
+                            .colourDistance(targetColour) <= 50) {
                     Collections.shuffle(bestMatching3Tiles);
                 }
                 tileGrid.add(j, i, bestMatching3Tiles.get(0));
@@ -153,11 +123,13 @@ public class Mosaic {
                         .collect(Collectors.toCollection(Stack::new));
                 do {
                     bestMatchingTile = tileStack.pop();
-                } while (!tileStack.empty() && distanceToSameImageOnGrid(bestMatchingTile, colourCoord.x(), colourCoord.y()) < minimumRepetitionDistance);
+                } while (
+                        !tileStack.empty() &&
+                        distanceToSameImageOnGrid(bestMatchingTile, colourCoord.x(), colourCoord.y()) < minimumRepetitionDistance
+                );
             }
 
             tileGrid.add(colourCoord.x(), colourCoord.y(), bestMatchingTile);
-//            availableTiles.remove(bestMatchingTile);
             for (Grid.Coordinate<Color> neighbour : colourGrid.neighboursOf(colourCoord)) {
                 if (!visited.contains(neighbour)) {
                     visited.add(neighbour);
@@ -168,12 +140,10 @@ public class Mosaic {
     }
 
     private int distanceToSameImageOnGrid(Tile tile, int placementX, int placementY) {
-        Set<Grid.Coordinate<Tile>> visited = new TreeSet<>();
-        Queue<Grid.Coordinate<Tile>> queue = new ArrayDeque<>();
-
         SortedSet<Grid.Coordinate<Tile>> neighbours = tileGrid.neighboursOf(placementX, placementY);
-        visited.addAll(neighbours);
-        queue.addAll(neighbours);
+
+        Set<Grid.Coordinate<Tile>> visited = new TreeSet<>(neighbours);
+        Queue<Grid.Coordinate<Tile>> queue = new ArrayDeque<>(neighbours);
 
         while (!queue.isEmpty()) {
             Grid.Coordinate<Tile> c = queue.poll();
@@ -204,23 +174,32 @@ public class Mosaic {
         System.out.println("Result image supposedly prepared");
         for (int i = 0; i < rowCount; i++) {
             for (int j = 0; j < columnCount; j++) {
-                System.out.println("Treating image: " + (i * columnCount + j + 1) + " started...");
                 BufferedImage tileImage = tileGrid.get(j, i).unwrap().getImage();
                 BufferedImage resizedTileImage = new BufferedImage(tileWidth, tileHeight, tileImage.getType());
                 SwingUtilities.invokeAndWait(() -> {
                     Graphics2D tileG = resizedTileImage.createGraphics();
-                    tileG.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
-                    tileG.drawImage(tileImage, 0, 0, tileWidth, tileHeight, 0, 0, tileImage.getWidth(), tileImage.getHeight(), null);
+                    tileG.setRenderingHint(
+                            RenderingHints.KEY_INTERPOLATION,
+                            RenderingHints.VALUE_INTERPOLATION_BILINEAR
+                    );
+                    tileG.drawImage(
+                            tileImage,
+                            0, 0, tileWidth, tileHeight,
+                            0, 0, tileImage.getWidth(), tileImage.getHeight(),
+                            null
+                    );
                     tileG.dispose();
                 });
                 int finalJ = j;
                 int finalI = i;
                 SwingUtilities.invokeAndWait(() -> {
                     Graphics2D resultGraphics = result.createGraphics();
-                    resultGraphics.drawImage(resizedTileImage, null, finalJ * tileWidth, finalI * tileHeight);
-//                    resultGraphics.dispose();
+                    resultGraphics.drawImage(
+                            resizedTileImage, null,
+                            finalJ * tileWidth, finalI * tileHeight
+                    );
+                    resultGraphics.dispose();
                 });
-                System.out.println("Treating image: " + (i * columnCount + j + 1) + " completed.");
             }
         }
         return result;
