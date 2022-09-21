@@ -39,13 +39,7 @@ public final class Grid<E> {
     }
 
     public SortedSet<Coordinate<E>> neighboursOf(Coordinate<E> coord) {
-        return coordinates.stream()
-                .filter(
-                        c -> c.x - coord.x <= 1 && c.x - coord.x >= -1 &&
-                             c.y - coord.y <= 1 && c.y - coord.y >= -1 &&
-                             !c.equals(coord)
-                )
-                .collect(Collectors.toCollection(TreeSet::new));
+        return neighboursOf(coord.x, coord.y);
     }
 
     public SortedSet<Coordinate<E>> neighboursOf(int x, int y) {
