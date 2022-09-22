@@ -6,10 +6,16 @@ import java.awt.image.BufferedImage;
 import java.lang.reflect.InvocationTargetException;
 import java.util.*;
 import java.util.List;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public class Mosaic {
+
+    public static MosaicBuilder newInstance() {
+        return new MosaicBuilder();
+    }
+
     private final BufferedImage image;
     private final Set<Tile> tiles;
 
@@ -44,6 +50,30 @@ public class Mosaic {
 
         this.tileGrid = new Grid<>(columnCount, rowCount);
         fillImageGridCenterBiased(minimumRepetitionDistance);
+    }
+
+    // used by builder
+    Mosaic(Supplier<BufferedImage> targetImageSupplier,
+           Supplier<Set<Tile>> tileSupplier,
+           Tile.AspectRatio tileAspectRatio,
+           int tileCountHint,
+           int minRepetitionDistance) {
+        this.image = targetImageSupplier.get();
+
+        int[] rowsAndCols = calculateRowsAndCols(tileCountHint, tileAspectRatio);
+        this.columnCount = rowsAndCols[0];
+        this.rowCount = rowsAndCols[1];
+
+        this.tileHeight = image.getHeight() / rowCount;
+        this.tileWidth = (int) Math.round(tileHeight * tileAspectRatio.ratio());
+
+        this.tiles = tileSupplier.get();
+
+        this.colourGrid = new Grid<>(columnCount, rowCount);
+        fillColourGrid();
+
+        this.tileGrid = new Grid<>(columnCount, rowCount);
+        fillImageGridCenterBiased(minRepetitionDistance);
     }
 
     private int[] calculateRowsAndCols(int tileCount, Tile.AspectRatio aspectRatio) {
